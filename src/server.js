@@ -2,7 +2,9 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const rateLimit = require("express-rate-limit");
-const proxyRoutes = require("./routes/proxy");
+const path = require("path");
+const ApiError = require("./ApiError");
+const proxyRoutes = require("./proxy.route");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -35,33 +37,63 @@ app.use(
 app.use("/proxy", proxyRoutes);
 
 // Serve test page
-const path = require("path");
 app.use("/test", express.static(path.join(__dirname, "test.html")));
 
-// Health-check
+
+
+const proxyEndpoint = (type, placeholder) => `/proxy/${type}?url=<${placeholder}>`;
+
 app.get("/", (_req, res) => {
   res.json({
     status: "ok",
     service: "m3u8-proxy",
+    note: "Some m3u8 streams require a referer header",
     endpoints: {
-      m3u8: "/proxy/m3u8?url=<encoded_m3u8_url>",
-      segment: "/proxy/segment?url=<encoded_segment_url>",
-      key: "/proxy/key?url=<encoded_key_url>",
-      subtitle: "/proxy/subtitle?url=<encoded_subtitle_url>",
-      audio: "/proxy/audio?url=<encoded_audio_url>",
-      image: "/proxy/image?url=<encoded_image_url>",
-      generic: "/proxy/raw?url=<encoded_url>",
+      player: "/test",
+      m3u8: `${proxyEndpoint("m3u8", "encoded_m3u8_url")}&referer=<encoded_referer_url>`,
+      segment: proxyEndpoint("segment", "encoded_segment_url"),
+      key: proxyEndpoint("key", "encoded_key_url"),
+      subtitle: proxyEndpoint("subtitle", "encoded_subtitle_url"),
+      audio: proxyEndpoint("audio", "encoded_audio_url"),
+      image: proxyEndpoint("image", "encoded_image_url"),
+      generic: proxyEndpoint("raw", "encoded_url"),
     },
   });
 });
 
 // ─── Global error handler ────────────────────────────────────────────────────
-app.use((err, _req, res, _next) => {
-  console.error("[ERROR]", err.message);
+app.use((err, _, res, _next) => {
+  console.log("An error", err);
+
   res.set("Access-Control-Allow-Origin", "*");
-  res.status(500).json({ error: "Internal server error" });
+
+  if (err?.statusCode) {
+    return res.status(err.statusCode || 500).json(err);
+  }
+
+  return res
+    .status(err.statusCode || 500)
+    .json(
+      new ApiError(err.statusCode || 500, "An error occurred", err.message)
+    );
 });
 
+/**
+ * 404
+ */
+app.use("*", function (_, res) {
+  return res.status(404).json(new ApiError(404, "Page not found"));
+});
+
+// ==================== START SERVER ====================
 app.listen(PORT, () => {
-  console.log(`✅  m3u8-proxy running on http://localhost:${PORT}`);
+  console.log(`✅ M3U8 Proxy running on port ${PORT}`);
+  console.log(`▶️  Play: http://localhost:${PORT}/test`);
+  console.log(`📋 Manifest: http://localhost:${PORT}/proxy/m3u8?url=...`);
+  console.log(`🔑 Key: http://localhost:${PORT}/proxy/key?url=...`);
+  console.log(`📦 Segment: http://localhost:${PORT}/proxy/segment?url=...`);
+  console.log(`💬 Subtitle: http://localhost:${PORT}/proxy/subtitle?url=...`);
+  console.log(`🎵 Audio: http://localhost:${PORT}/proxy/audio?url=...`);
+  console.log(`🖼️  Image: http://localhost:${PORT}/proxy/image?url=...`);
+  console.log(`🌐 Generic: http://localhost:${PORT}/proxy/raw?url=...`);
 });
