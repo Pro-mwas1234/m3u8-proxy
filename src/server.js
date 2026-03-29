@@ -9,6 +9,20 @@ const proxyRoutes = require("./proxy.route");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// ─── Force HTTPS Redirect (Production/Vercel) ─────────────────────────────────
+app.use((req, res, next) => {
+  const isHttps =
+    req.headers["x-forwarded-proto"] === "https" ||
+    process.env.VERCEL === "1" ||
+    req.protocol === "https";
+
+  // Only redirect in production, not local dev
+  if (!isHttps && process.env.NODE_ENV === "production") {
+    return res.redirect(301, `https://${req.get("host")}${req.url}`);
+  }
+  next();
+});
+
 // ─── CORS ────────────────────────────────────────────────────────────────────
 const allowedOrigins = process.env.ALLOWED_ORIGINS || "*";
 app.use(
@@ -36,7 +50,7 @@ app.use(
 // ─── Routes ──────────────────────────────────────────────────────────────────
 app.use("/proxy", proxyRoutes);
 
-// Serve test page - FIXED: Looks in same directory as server.js (src/)
+// Serve test page - FIXED for Vercel (test.html is in src/ alongside server.js)
 const staticPath = path.join(__dirname, "test.html");
 app.use("/test", express.static(staticPath));
 
@@ -49,7 +63,10 @@ app.get("/", (_req, res) => {
     note: "Some m3u8 streams require a referer header",
     endpoints: {
       player: "/test",
-      m3u8: `${proxyEndpoint("m3u8", "encoded_m3u8_url")}&referer=<encoded_referer_url>`,
+      m3u8: `${proxyEndpoint(
+        "m3u8",
+        "encoded_m3u8_url"
+      )}&referer=<encoded_referer_url>`,
       segment: proxyEndpoint("segment", "encoded_segment_url"),
       key: proxyEndpoint("key", "encoded_key_url"),
       subtitle: proxyEndpoint("subtitle", "encoded_subtitle_url"),
