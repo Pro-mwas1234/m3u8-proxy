@@ -16,9 +16,9 @@ app.use(
     allowedOrigins === "*"
       ? {}
       : {
-        origin: allowedOrigins.split(",").map((o) => o.trim()),
-        methods: ["GET", "HEAD", "OPTIONS"],
-      }
+          origin: allowedOrigins.split(",").map((o) => o.trim()),
+          methods: ["GET", "HEAD", "OPTIONS"],
+        }
   )
 );
 
@@ -36,10 +36,11 @@ app.use(
 // ─── Routes ──────────────────────────────────────────────────────────────────
 app.use("/proxy", proxyRoutes);
 
-// Serve test page
-app.use("/test", express.static(path.join(__dirname, "test.html")));
-
-
+// Serve test page - FIXED for Vercel (looks in root, not src)
+const staticPath = process.env.VERCEL
+  ? path.join(process.cwd(), "test.html")
+  : path.join(__dirname, "../test.html");
+app.use("/test", express.static(staticPath));
 
 const proxyEndpoint = (type, placeholder) => `/proxy/${type}?url=<${placeholder}>`;
 
@@ -62,9 +63,8 @@ app.get("/", (_req, res) => {
 });
 
 // ─── Global error handler ────────────────────────────────────────────────────
-app.use((err, _, res, _next) => {
+app.use((err, _req, res, _next) => {
   console.log("An error", err);
-
   res.set("Access-Control-Allow-Origin", "*");
 
   if (err?.statusCode) {
@@ -73,27 +73,23 @@ app.use((err, _, res, _next) => {
 
   return res
     .status(err.statusCode || 500)
-    .json(
-      new ApiError(err.statusCode || 500, "An error occurred", err.message)
-    );
+    .json(new ApiError(err.statusCode || 500, "An error occurred", err.message));
 });
 
-/**
- * 404
- */
-app.use("*", function (_, res) {
+// ─── 404 Handler ─────────────────────────────────────────────────────────────
+app.use("*", function (_req, res) {
   return res.status(404).json(new ApiError(404, "Page not found"));
 });
 
 // ==================== START SERVER ====================
-app.listen(PORT, () => {
-  console.log(`✅ M3U8 Proxy running on port ${PORT}`);
-  console.log(`▶️  Play: http://localhost:${PORT}/test`);
-  console.log(`📋 Manifest: http://localhost:${PORT}/proxy/m3u8?url=...`);
-  console.log(`🔑 Key: http://localhost:${PORT}/proxy/key?url=...`);
-  console.log(`📦 Segment: http://localhost:${PORT}/proxy/segment?url=...`);
-  console.log(`💬 Subtitle: http://localhost:${PORT}/proxy/subtitle?url=...`);
-  console.log(`🎵 Audio: http://localhost:${PORT}/proxy/audio?url=...`);
-  console.log(`🖼️  Image: http://localhost:${PORT}/proxy/image?url=...`);
-  console.log(`🌐 Generic: http://localhost:${PORT}/proxy/raw?url=...`);
-});
+// Only start server if NOT running on Vercel (serverless)
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`✅ M3U8 Proxy running on port ${PORT}`);
+    console.log(`▶️  Play: http://localhost:${PORT}/test`);
+    console.log(`📋 Manifest: http://localhost:${PORT}/proxy/m3u8?url=...`);
+  });
+}
+
+// Export app for Vercel serverless functions
+module.exports = app;
