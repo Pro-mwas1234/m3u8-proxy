@@ -290,7 +290,7 @@ class ProxyController {
         }
       } else if (trimmedLine && !trimmedLine.startsWith("#")) {
         try {
-          const absoluteUrl = trimmedLine.startsWith("http")
+          const absoluteUrl = trimmedLine.startsWith("https")
             ? trimmedLine
             : new URL(trimmedLine, targetUrl).href;
 
