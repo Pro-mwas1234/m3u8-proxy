@@ -36,10 +36,8 @@ app.use(
 // ─── Routes ──────────────────────────────────────────────────────────────────
 app.use("/proxy", proxyRoutes);
 
-// Serve test page - FIXED for Vercel (looks in root, not src)
-const staticPath = process.env.VERCEL
-  ? path.join(process.cwd(), "test.html")
-  : path.join(__dirname, "../test.html");
+// Serve test page - FIXED: Looks in same directory as server.js (src/)
+const staticPath = path.join(__dirname, "test.html");
 app.use("/test", express.static(staticPath));
 
 const proxyEndpoint = (type, placeholder) => `/proxy/${type}?url=<${placeholder}>`;
