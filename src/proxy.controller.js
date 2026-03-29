@@ -4,10 +4,6 @@ const ApiError = require("./ApiError");
 
 /**
  * Handles API errors consistently.
- * @param {import("express").Response} res - Express response object
- * @param {Error|unknown} error - The error thrown
- * @param {string} message - Custom error message
- * @returns {Express.Response}
  */
 function handleApiError(res, error, message) {
   console.error(message + ":", error instanceof Error ? error.message : error);
@@ -15,7 +11,17 @@ function handleApiError(res, error, message) {
   return res.status(500).json(apiError);
 }
 
-// REMOVED: const ROOT_URL = process.env.ROOT_URL || `http://localhost:${process.env.PORT || 3001}`
+// 🔐 HELPER: Force HTTPS for Vercel/proxy environments to avoid mixed-content
+function getProxyBaseUrl(req) {
+  const forwardedProto = req.headers["x-forwarded-proto"];
+  const isHttps =
+    forwardedProto === "https" ||
+    process.env.VERCEL === "1" ||
+    req.protocol === "https";
+  const protocol = isHttps ? "https" : "http";
+  const host = req.get("host");
+  return `${protocol}://${host}`;
+}
 
 /**
  * Shared Axios instance used for all upstream fetches.
@@ -39,11 +45,7 @@ const fetcher = axios.create({
  */
 async function fetchUpstream(url, clientHeaders = {}, customReferer = null) {
   const forwardHeaders = {};
-  const passthroughKeys = [
-    "range",
-    "if-none-match",
-    "if-modified-since",
-  ];
+  const passthroughKeys = ["range", "if-none-match", "if-modified-since"];
   for (const key of passthroughKeys) {
     if (clientHeaders[key]) forwardHeaders[key] = clientHeaders[key];
   }
@@ -251,7 +253,7 @@ class ProxyController {
   }
 
   /**
-   * Rewrite URLs in m3u8 content - NOW ACCEPTS proxyBaseUrl PARAMETER
+   * Rewrite URLs in m3u8 content - NOW USES getProxyBaseUrl()
    */
   async processPlaylist(content, targetUrl, referer, proxyBaseUrl) {
     let lines = content.split("\n");
@@ -274,12 +276,11 @@ class ProxyController {
         const uriMatch = line.match(/URI="([^"]+)"/);
         if (uriMatch && uriMatch[1]) {
           const keyUri = uriMatch[1];
-          const absoluteKeyUrl = keyUri.startsWith("https")
+          const absoluteKeyUrl = keyUri.startsWith("http")
             ? keyUri
             : new URL(keyUri, targetUrl).href;
 
           const encodedKey = encodeURIComponent(absoluteKeyUrl);
-          // FIXED: Use proxyBaseUrl instead of ROOT_URL
           const newLine = line.replace(
             /URI="[^"]+"/,
             `URI="${proxyBaseUrl}/proxy/key?url=${encodedKey}${refSuffix}"`
@@ -290,19 +291,17 @@ class ProxyController {
         }
       } else if (trimmedLine && !trimmedLine.startsWith("#")) {
         try {
-          const absoluteUrl = trimmedLine.startsWith("https")
+          const absoluteUrl = trimmedLine.startsWith("http")
             ? trimmedLine
             : new URL(trimmedLine, targetUrl).href;
 
           if (absoluteUrl.includes(".m3u8")) {
-            // FIXED: Use proxyBaseUrl instead of ROOT_URL
             processedLines.push(
               `${proxyBaseUrl}/proxy/m3u8?url=${encodeURIComponent(
                 absoluteUrl
               )}${refSuffix}&_direct=1`
             );
           } else {
-            // FIXED: Use proxyBaseUrl instead of ROOT_URL
             processedLines.push(
               `${proxyBaseUrl}/proxy/segment?url=${encodeURIComponent(
                 absoluteUrl
@@ -445,8 +444,8 @@ class ProxyController {
           const refSuffix = refParam
             ? `&referer=${encodeURIComponent(refParam)}`
             : "";
-          // FIXED: Use dynamic proxyBaseUrl
-          const proxyBaseUrl = `${req.protocol}://${req.get("host")}`;
+          // 🔐 FIXED: Use getProxyBaseUrl helper
+          const proxyBaseUrl = getProxyBaseUrl(req);
           const mediaUrl = `${proxyBaseUrl}/proxy/m3u8?url=${encodeURIComponent(
             targetUrl
           )}${refSuffix}&_direct=1`;
@@ -464,8 +463,8 @@ class ProxyController {
           return res.send(processedContent);
         }
 
-        // FIXED: Use dynamic proxyBaseUrl
-        const proxyBaseUrl = `${req.protocol}://${req.get("host")}`;
+        // 🔐 FIXED: Use getProxyBaseUrl helper
+        const proxyBaseUrl = getProxyBaseUrl(req);
         const processedContent = await this.processPlaylist(
           content,
           targetUrl,
@@ -693,8 +692,8 @@ class ProxyController {
       const ct = (upstream.headers["content-type"] || "").toLowerCase();
       if (ct.includes("mpegurl") || url.endsWith(".m3u8")) {
         const bodyText = upstream.data.toString("utf-8");
-        // FIXED: Use dynamic proxyBaseUrl
-        const proxyBaseUrl = `${req.protocol}://${req.get("host")}`;
+        // 🔐 FIXED: Use getProxyBaseUrl helper
+        const proxyBaseUrl = getProxyBaseUrl(req);
         const rewritten = await this.processPlaylist(
           bodyText,
           url,
@@ -743,8 +742,8 @@ class ProxyController {
       const ct = (upstream.headers["content-type"] || "").toLowerCase();
       if (ct.includes("mpegurl") || /\.m3u8?(\?|$)/i.test(url)) {
         const bodyText = upstream.data.toString("utf-8");
-        // FIXED: Use dynamic proxyBaseUrl
-        const proxyBaseUrl = `${req.protocol}://${req.get("host")}`;
+        // 🔐 FIXED: Use getProxyBaseUrl helper
+        const proxyBaseUrl = getProxyBaseUrl(req);
         const rewritten = await this.processPlaylist(
           bodyText,
           url,
