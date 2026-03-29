@@ -168,7 +168,7 @@
 
                 hls.on(Hls.Events.BUFFER_CODECS, function (e, data) {
                     log(`Buffer codecs: ${JSON.stringify(Object.keys(data))} video=${data.video?.codec} audio=${data.audio?.codec}`, 'info');
-                });
+                })
 
                 hls.on(Hls.Events.BUFFER_CREATED, function (e, data) {
                     log(`Buffer created: ${JSON.stringify(Object.keys(data.tracks))}`, 'info');
@@ -192,7 +192,7 @@
         // Pre-fill with test URL
         const testM3u8 = encodeURIComponent('https://vault-99.owocdn.top/stream/99/02/2a68c81be71f0ff24c35b0bb444be00bc7a149cd42c9c433770d5b5308d28316/uwu.m3u8');
         const testReferer = encodeURIComponent('https://kwik.cx/');
-        document.getElementById('url').value = `http://localhost:3500/proxy/m3u8?url=${testM3u8}&referer=${testReferer}`;
+        document.getElementById('url').value = `https://m3u8-proxy-snowy.vercel.app/proxy/m3u8?url=${testM3u8}&referer=${testReferer}`;
     </script>
 </body>
 
