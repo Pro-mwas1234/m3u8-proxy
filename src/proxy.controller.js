@@ -274,7 +274,7 @@ class ProxyController {
         const uriMatch = line.match(/URI="([^"]+)"/);
         if (uriMatch && uriMatch[1]) {
           const keyUri = uriMatch[1];
-          const absoluteKeyUrl = keyUri.startsWith("http")
+          const absoluteKeyUrl = keyUri.startsWith("https")
             ? keyUri
             : new URL(keyUri, targetUrl).href;
 
